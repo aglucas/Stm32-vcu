@@ -24,11 +24,25 @@
 #include "my_math.h"
 
 
+//Scale a value onto a TIM3 output compare channel as a PWM duty cycle.
+//inMin maps to 0% duty and inMax maps to 100% duty (relative to Tim3_Period).
+static void SetGaugePwm(enum tim_oc_id channel, float value, float inMin, float inMax)
+{
+    float period = Param::GetInt(Param::Tim3_Period);
+    float oc = utils::changeFloat(value, inMin, inMax, 0.0f, period);
+    oc = MAX(0.0f, MIN(period, oc));//clamp to 0..100% duty
+    timer_set_oc_value(TIM3, channel, (uint32_t)oc);
+}
+
+
 //We use this as an init function
 void V_Classic::SetCanInterface(CanHardware* c)//Abusing the SetCanInterface as a initializer function on start up
 {
     can = c;
     utils::SpeedoStart();
+    //Connect PWM1 (PA6/TIM3_CH1) and PWM2 (PA7/TIM3_CH2) outputs to the timer
+    //hardware so SoC and battery temperature can be driven as PWM duty cycles.
+    gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ, GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO6 | GPIO7);
 }
 
 
@@ -44,9 +58,8 @@ void V_Classic::SetRevCounter(int speed)
 
 void V_Classic::SetTemperatureGauge(float temp)
 {
-    float dc = temp * 10; //TODO find right factor for value like 0..0.5 or so
-    //Would like to use digi pots here
-    dc = dc;
+    //Not used: battery temperature is output on PWM2 from Task10Ms using BMS_Tmax.
+    (void)temp;
 }
 
 void V_Classic::Task1Ms()
@@ -57,7 +70,11 @@ void V_Classic::Task1Ms()
 
 void V_Classic::Task10Ms()
 {
-
+    //Output battery state onto the general purpose PWM outputs:
+    //  PWM1 (PA6/TIM3_CH1): State of Charge      0..100 %  -> 0..100% duty
+    //  PWM2 (PA7/TIM3_CH2): BMS max temperature  -10..45 °C -> 0..100% duty
+    SetGaugePwm(TIM_OC1, Param::GetFloat(Param::SOC), 0.0f, 100.0f);
+    SetGaugePwm(TIM_OC2, Param::GetFloat(Param::BMS_Tmax), -10.0f, 45.0f);
 }
 
 

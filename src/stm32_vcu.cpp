@@ -555,7 +555,9 @@ static void Ms10Task(void)
 
     selectedInverter->SetTorque(torquePercent);
 
-    if(Param::GetInt(Param::potnom) < Param::GetInt(Param::RegenBrakeLight))
+    bool brake = Param::GetBool(Param::din_brake);
+    if(Param::GetInt(Param::potnom) < Param::GetInt(Param::RegenBrakeLight)  ||
+        brake)
     {
         //enable Brake Light Ouput
         IOMatrix::GetPin(IOMatrix::BRAKELIGHT)->Set();

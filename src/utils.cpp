@@ -446,12 +446,54 @@ void displayThrottle()
 
 void CalcSOC()
 {
-    float Capacity_Parm = Param::GetFloat(Param::BattCap);
-    float kwh_Used = ABS(Param::GetFloat(Param::KWh));
+    //Nissan LEAF gen2 40kWh pack (96S) dashboard SOC vs total pack voltage reference table:
+    //Dashboard SOC | Average Cell Voltage | Total Pack Voltage (96S) | Behavioral Phase
+    //100%          | ~4.19V - 4.22V        | 402.2V - 405.1V          | The Peak: Drops rapidly over the first 5%-10% of driving.
+    //90%           | ~4.11V                | 394.5V                   | High-energy shoulder.
+    //80%           | ~4.05V - 4.06V        | 388.8V - 389.8V          | Linear discharge region begins.
+    //70%           | ~3.98V                | 382.1V                   | Stable flat plateau.
+    //50%           | ~3.82V                | 366.7V                   | Nominal midline rating.
+    //30%           | ~3.71V                | 356.2V                   | Lower edge of the flat plateau.
+    //20%           | ~3.68V                | 353.3V                   | Low Battery Warning triggers on dashboard.
+    //10%           | ~3.55V                | 340.8V                   | Very Low Battery Warning; voltage drop accelerates sharply.
+    //5%            | ~3.43V                | 329.3V                   | Turtle Mode: Motor power significantly restricted to save cells.
+    //1% - 0%       | ~3.10V - 3.12V        | 297.6V - 299.5V          | Shutdown Floor: Car shifts to Neutral and shuts down.
+    static const struct { float soc; float voltage; } socTable[] = {
+        {100.0f, 403.7f}, //avg of 402.2-405.1V
+        { 90.0f, 394.5f},
+        { 80.0f, 389.3f}, //avg of 388.8-389.8V
+        { 70.0f, 382.1f},
+        { 50.0f, 366.7f},
+        { 30.0f, 356.2f},
+        { 20.0f, 353.3f},
+        { 10.0f, 340.8f},
+        {  5.0f, 329.3f},
+        {  0.0f, 298.6f}, //avg of 297.6-299.5V
+    };
+    const int numPoints = sizeof(socTable) / sizeof(socTable[0]);
+    float udc = Param::GetFloat(Param::udc);
 
-    SOCVal = 100.0f - 100.0f * kwh_Used / Capacity_Parm;
+    if (udc >= socTable[0].voltage)
+    {
+        SOCVal = socTable[0].soc;
+    }
+    else if (udc <= socTable[numPoints - 1].voltage)
+    {
+        SOCVal = socTable[numPoints - 1].soc;
+    }
+    else
+    {
+        for (int i = 0; i < numPoints - 1; i++)
+        {
+            if (udc <= socTable[i].voltage && udc >= socTable[i + 1].voltage)
+            {
+                SOCVal = changeFloat(udc, socTable[i + 1].voltage, socTable[i].voltage,
+                                      socTable[i + 1].soc, socTable[i].soc);
+                break;
+            }
+        }
+    }
 
-    if(SOCVal > 100) SOCVal = 100;
     Param::SetFloat(Param::SOC,SOCVal);
 }
 
