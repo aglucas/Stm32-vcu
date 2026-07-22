@@ -104,6 +104,7 @@
 #include "kangoobms.h"
 #include "OutlanderCanHeater.h"
 #include "OutlanderHeartBeat.h"
+#include "Maintainer12V.h"
 
 #define PRECHARGE_TIMEOUT 5  //5s
 
@@ -133,6 +134,7 @@ static bool StartSig=false;
 static bool ACrequest=false;
 static bool initbyStart=false;
 static bool initbyCharge=false;
+static bool maintainStartPending=false; //latches a momentary start signal seen while in MOD_MAINTAIN until MOD_OFF can act on it
 static bool OutlanderCAN=false;
 
 static volatile unsigned
@@ -196,6 +198,7 @@ static Can_OBD2 canOBD2;
 static Shifter shifterNone;
 static RearOutlanderInverter rearoutlanderInv;
 static LinBus* lin;
+static Maintainer12V maintainer12V;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void Ms200Task(void)
@@ -353,6 +356,8 @@ static void Ms200Task(void)
     {
         IOMatrix::GetPin(IOMatrix::BRAKEVACPUMP)->Clear();
     }
+
+    maintainer12V.Task200Ms(opmode);
 
 }
 
@@ -598,6 +603,7 @@ static void Ms10Task(void)
     case MOD_OFF:
         initbyStart=false;
         initbyCharge=false;
+        maintainer12V.SetInitByMaintainer(false);
         DigIo::inv_out.Clear();//inverter power off
         IOMatrix::GetPin(IOMatrix::COOLANTPUMP)->Clear();//Coolant pump off if used
         Param::SetInt(Param::dir, 0); // shift to park/neutral on shutdown regardless of shifter pos
@@ -614,13 +620,14 @@ static void Ms10Task(void)
 
         if(Param::GetInt(Param::pot) < Param::GetInt(Param::potmin))
         {
-            if ((selectedVehicle->Start() && selectedVehicle->Ready()))
+            if ((selectedVehicle->Start() && selectedVehicle->Ready()) || maintainStartPending)
             {
                 StartSig=true;
-                opmode = MOD_PRECHARGE;//proceed to precharge if 1)throttle not pressed , 2)ign on , 3)start signal rx
+                opmode = MOD_PRECHARGE;//proceed to precharge if 1)throttle not pressed , 2)ign on , 3)start signal rx (or a start was requested while 12V-maintaining)
                 rlyDly=25;//Recharge sequence timer
                 vehicleStartTime = rtc_get_counter_val();
                 initbyStart=true;
+                maintainStartPending=false;
             }
         }
         if(chargeMode)
@@ -629,6 +636,13 @@ static void Ms10Task(void)
             rlyDly=25;//Recharge sequence timer
             vehicleStartTime = rtc_get_counter_val();
             initbyCharge=true;
+        }
+        if(maintainer12V.GetRunMaintainer())
+        {
+            opmode = MOD_PRECHARGE;//proceed to precharge if 12V maintainer requested.
+            rlyDly=25;//Recharge sequence timer
+            vehicleStartTime = rtc_get_counter_val();
+            maintainer12V.SetInitByMaintainer(true);
         }
         Param::SetInt(Param::opmode, opmode);
         break;
@@ -661,10 +675,18 @@ static void Ms10Task(void)
                 rlyDly=25;//Recharge sequence timer
                 Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
             }
+            else if(maintainer12V.GetRunMaintainer())
+            {
+                opmode = MOD_MAINTAIN;
+                rlyDly=25;//Recharge sequence timer
+                Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
+                Param::SetInt(Param::maintainWakeups, Param::GetInt(Param::maintainWakeups) + 1);
+            }
 
         }
         if(initbyCharge && !chargeMode) opmode = MOD_OFF;// These two statements catch a precharge hang from either start mode or run mode.
         if(initbyStart && !selectedVehicle->Ready()) opmode = MOD_OFF;
+        if(maintainer12V.GetInitByMaintainer() && !maintainer12V.GetRunMaintainer()) opmode = MOD_OFF;
         if (udc < (Param::GetInt(Param::udcsw)) && rtc_get_counter_val() > (vehicleStartTime + PRECHARGE_TIMEOUT))
         {
             DigIo::prec_out.Clear();
@@ -695,6 +717,34 @@ static void Ms10Task(void)
             rlyDly=250;//Recharge sequence timer for delayed shutdown
         }
         Param::SetInt(Param::opmode, opmode);
+        break;
+
+    case MOD_MAINTAIN:
+        if(rlyDly!=0) rlyDly--;//here we are going to pause before energising precharge to prevent too many contactors pulling amps at the same time
+        if(rlyDly==0)
+        {
+            DigIo::dcsw_out.Set();
+        }
+
+        maintainer12V.Ms10Task();
+
+        if(!maintainer12V.GetRunMaintainer())
+        {
+            rlyDly=250;//Recharge sequence timer for delayed shutdown
+        }
+
+        if(selectedVehicle->Start() && selectedVehicle->Ready())
+        {
+            //Start signal may be momentary - latch it so MOD_OFF still sees the
+            //request once the maintainer has handed control back, even if the
+            //pulse has already ended by then.
+            maintainStartPending=true;
+            maintainer12V.CancelMaintainer();
+        }
+        else if(chargeMode)
+        {
+            maintainer12V.CancelMaintainer();
+        }
         break;
 
     case MOD_RUN:
@@ -1133,6 +1183,8 @@ void Param::Change(Param::PARAM_NUM paramNum)
     ChgTicks = (GetInt(Param::Chg_Dur)*300);//number of 200ms ticks that equates to charge timer in minutes
     IOMatrix::AssignFromParams();
     IOMatrix::AssignFromParamsAnalogue();
+
+    maintainer12V.ParamsChange();
 }
 
 
