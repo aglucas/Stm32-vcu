@@ -79,6 +79,7 @@
 #include "simpbms.h"
 #include "leafbms.h"
 #include "daisychainbms.h"
+#include "custombms.h"
 #include "outlanderCharger.h"
 #include "Can_OBD2.h"
 #include "dcdc.h"
@@ -185,10 +186,11 @@ static BMS BMSnone;
 static SimpBMS BMSsimp;
 static LeafBMS BMSleaf;
 static DaisychainBMS BMSdaisychain;
+static CustomBMS BMSCustomBMS;
 static KangooBMS BMSRenaultKangoo33;
 static DCDC DCDCnone;
 static TeslaDCDC DCDCTesla;
-static BMS* selectedBMS = &BMSnone;
+static BMS* selectedBMS = &BMSCustomBMS;
 static DCDC* selectedDCDC = &DCDCnone;
 static Can_OBD2 canOBD2;
 static Shifter shifterNone;
@@ -351,7 +353,6 @@ static void Ms200Task(void)
     {
         IOMatrix::GetPin(IOMatrix::BRAKEVACPUMP)->Clear();
     }
-
 
 }
 
@@ -548,7 +549,6 @@ static void Ms10Task(void)
 
 
     selectedInverter->SetTorque(torquePercent);
-
 
     if(Param::GetInt(Param::potnom) < Param::GetInt(Param::RegenBrakeLight))
     {
@@ -912,6 +912,9 @@ static void UpdateBMS()
         break;
     case BMSModes::BMSRenaultKangoo33BMS:
         selectedBMS = &BMSRenaultKangoo33;
+        break;
+    case BMSModes::BMSModeCustomBMS:
+        selectedBMS = &BMSCustomBMS;
         break;
     default:
         // Default to no BMS
