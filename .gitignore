@@ -49,3 +49,16 @@ test_vcu
 
 # hex output - only keep for releases
 stm32_vcu.hex
+
+# Visual Studio / IDE
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# VS Code (personal editor config)
+.vscode/
+
+# Claude Code
+.claude/
