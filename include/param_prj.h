@@ -27,7 +27,7 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 147
+//Next param id (increase when adding new parameter!): 151
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,      8,      0,      5  ) \
@@ -83,6 +83,7 @@
     PARAM_ENTRY(CAT_CRUISE,    cruiseramp,  "rpm/100ms",1,     1000,   20,     30 ) \
     PARAM_ENTRY(CAT_CRUISE,    regenlevel,  "",        0,      3,      2,      31 ) \
     PARAM_ENTRY(CAT_CONTACT,   udcsw,       "V",       0,      1000,   330,    32 ) \
+    PARAM_ENTRY(CAT_CONTACT,   ContOpenIdc, "A",       0,      500,    20,     147 ) \
     PARAM_ENTRY(CAT_CONTACT,   cruiselight, ONOFF,     0,      1,      0,      33 ) \
     PARAM_ENTRY(CAT_CONTACT,   errlights,   ERRLIGHTS, 0,      255,    0,      34 ) \
     PARAM_ENTRY(CAT_COMM,      CAN3Speed,   CAN3SPD,   0,      2,      0,      77 ) \
@@ -142,10 +143,13 @@
     PARAM_ENTRY(CAT_IOPINS,    DigiPot2Step,"dig",     0,      255,    0,      118 ) \
     PARAM_ENTRY(CAT_IOPINS,    FanTemp,     "°C",      0,      100,    40,     134 ) \
     PARAM_ENTRY(CAT_IOPINS,    TachoPPR,    "PPR",     0,      100,    2,      136 ) \
-    PARAM_ENTRY(CAT_12V,       uauxGain,    "",        0,      500,    210,    143 ) \
+    PARAM_ENTRY(CAT_12V,       uauxGain,    "",        100,    500,    210,    143 ) \
     PARAM_ENTRY(CAT_12V,       minVolts,    "",        11,     13,     12,     144 ) \
     PARAM_ENTRY(CAT_12V,       allowWakeup, ONOFF,     0,      1,      0,      145 ) \
-    PARAM_ENTRY(CAT_12V,       wakeupMins,  "Mins",    0,      20,     0,      146 ) \
+    PARAM_ENTRY(CAT_12V,       wakeupMins,  "Mins",    0,      120,    0,      146 ) \
+    PARAM_ENTRY(CAT_12V,       wakeupBlockMins,"Mins", 0,      255,    90,     148 ) \
+    PARAM_ENTRY(CAT_12V,       maintCountPeriod,"Hrs", 24,     168,    24,     149 ) \
+    PARAM_ENTRY(CAT_12V,       maintErrCount,  "",     0,      1023,   0,      150 ) \
     PARAM_ENTRY(CAT_SHUNT,     IsaInit,     ONOFF,     0,      1,      0,      75 ) \
     PARAM_ENTRY(CAT_PWM,       Tim3_Presc,  "",        1,      72000,  719,    100 ) \
     PARAM_ENTRY(CAT_PWM,       Tim3_Period, "",        1,      100000, 7200,   101 ) \
@@ -249,8 +253,9 @@
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
     VALUE_ENTRY(maintainWakeups, "",                2108 ) \
     VALUE_ENTRY(minsUntilAllowedAgain, "",           2109 ) \
+    VALUE_ENTRY(maintCount,    "",                  2110 ) \
 
-//Next value Id: 2110
+//Next value Id: 2111
 
 //Dead params
 /*

@@ -30,6 +30,7 @@ public:
   void ParamsChange();
   void SetInitByMaintainer(bool initbyM);
   void CancelMaintainer();
+  void IncrementMaintCount();
 
   bool GetRunMaintainer();
   bool GetInitByMaintainer();
@@ -43,6 +44,9 @@ private:
   uint32_t maintainTicks_1Min;
   uint16_t maintainDur_tmp;
   bool initbyMaintain;
+  uint16_t maintCount;
+  uint16_t maintCountPeriodMinutes;
+  uint16_t maintCountPeriodTicks;
 };
 
 #endif // MAINTAINER12V_H

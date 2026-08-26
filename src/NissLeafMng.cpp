@@ -364,7 +364,7 @@ void NissLeafMng::Task100Ms()
             SendCan = true;
             SleepCount = 100;//10s shut down counter reset
         }
-        if(opmode == MOD_CHARGE || opmode == MOD_RUN)//If we get put into RUN or Charge mode start CAN
+        if(opmode == MOD_CHARGE || opmode == MOD_RUN || opmode == MOD_MAINTAIN)//If we get put into RUN, Charge or 12V Maintain mode start CAN
         {
             SendCan = true;
             SleepCount = 100;//10s shut down counter reset

@@ -107,6 +107,7 @@
 #include "Maintainer12V.h"
 
 #define PRECHARGE_TIMEOUT 5  //5s
+#define CONTACTOR_OPEN_MAXWAIT 250  //2.5s extra max wait for measured current to drop below ContOpenIdc before forcing contactors open regardless
 
 #define PRINT_JSON 0
 
@@ -143,6 +144,8 @@ hours=0, minutes=0, seconds=0,
 alarm=0;			// != 0 when alarm is pending
 
 static uint16_t rlyDly=25;
+static uint16_t prechargeMinTime=200;
+static uint16_t contactorOpenWait=0; //counts up while shutdown holds contactors closed waiting for measured current to drop, capped by CONTACTOR_OPEN_MAXWAIT
 
 // Instantiate Classes
 static BMW_E31 e31Vehicle;
@@ -615,9 +618,19 @@ static void Ms10Task(void)
         if(rlyDly!=0) rlyDly--;//here we are going to pause to allow system shut down before opening HV contactors
         if(rlyDly==0)
         {
-            DigIo::dcsw_out.Clear();
-            IOMatrix::GetPin(IOMatrix::NEGCONTACTOR)->Clear();//Negative contactors off if used
-            DigIo::prec_out.Clear();
+            //Beyond the fixed minimum dwell, also wait for measured current to fall to a safe
+            //level before opening under load, but don't wait forever if it never does (e.g. no
+            //current sensor fitted, or a stuck/faulty reading) - force open after the max wait.
+            if((ABS(Param::GetFloat(Param::idc)) <= Param::GetFloat(Param::ContOpenIdc)) || (contactorOpenWait>=CONTACTOR_OPEN_MAXWAIT))
+            {
+                DigIo::dcsw_out.Clear();
+                IOMatrix::GetPin(IOMatrix::NEGCONTACTOR)->Clear();//Negative contactors off if used
+                DigIo::prec_out.Clear();
+            }
+            else
+            {
+                contactorOpenWait++;
+            }
         }
 
         if(Param::GetInt(Param::pot) < Param::GetInt(Param::potmin))
@@ -627,22 +640,27 @@ static void Ms10Task(void)
                 StartSig=true;
                 opmode = MOD_PRECHARGE;//proceed to precharge if 1)throttle not pressed , 2)ign on , 3)start signal rx (or a start was requested while 12V-maintaining)
                 rlyDly=25;//Recharge sequence timer
+                prechargeMinTime=200;//2 second minimum precharge time
                 vehicleStartTime = rtc_get_counter_val();
                 initbyStart=true;
                 maintainStartPending=false;
+                maintainer12V.CancelMaintainer();//a real drive start takes priority - don't leave a maintain cycle pending
             }
         }
         if(chargeMode)
         {
             opmode = MOD_PRECHARGE;//proceed to precharge if charge requested.
             rlyDly=25;//Recharge sequence timer
+            prechargeMinTime=200;//2 second minimum precharge time
             vehicleStartTime = rtc_get_counter_val();
             initbyCharge=true;
+            maintainer12V.CancelMaintainer();//a real charge request takes priority - don't leave a maintain cycle pending
         }
-        if(maintainer12V.GetRunMaintainer())
+        else if(maintainer12V.GetRunMaintainer())
         {
             opmode = MOD_PRECHARGE;//proceed to precharge if 12V maintainer requested.
             rlyDly=25;//Recharge sequence timer
+            prechargeMinTime=200;//2 second minimum precharge time
             vehicleStartTime = rtc_get_counter_val();
             maintainer12V.SetInitByMaintainer(true);
         }
@@ -662,7 +680,8 @@ static void Ms10Task(void)
         IOMatrix::GetPin(IOMatrix::COOLANTPUMP)->Set();
         if(rlyDly!=0) rlyDly--;//here we are going to pause before energising precharge to prevent too many contactors pulling amps at the same time
         if(rlyDly==0) DigIo::prec_out.Set();//commence precharge
-        if ((stt & (STAT_POTPRESSED | STAT_UDCBELOWUDCSW | STAT_UDCLIM)) == STAT_NONE)
+        if(prechargeMinTime!=0) prechargeMinTime--;//2 second minimum precharge time
+        if ((prechargeMinTime==0) && (stt & (STAT_POTPRESSED | STAT_UDCBELOWUDCSW | STAT_UDCLIM)) == STAT_NONE)
         {
             if(StartSig)
             {
@@ -683,6 +702,7 @@ static void Ms10Task(void)
                 rlyDly=25;//Recharge sequence timer
                 Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
                 Param::SetInt(Param::maintainWakeups, Param::GetInt(Param::maintainWakeups) + 1);
+                maintainer12V.IncrementMaintCount();
             }
 
         }
@@ -717,6 +737,7 @@ static void Ms10Task(void)
         {
             opmode = MOD_OFF;
             rlyDly=250;//Recharge sequence timer for delayed shutdown
+            contactorOpenWait=0;//fresh current-settle wait for this shutdown
         }
         Param::SetInt(Param::opmode, opmode);
         break;
@@ -733,6 +754,7 @@ static void Ms10Task(void)
         if(!maintainer12V.GetRunMaintainer())
         {
             rlyDly=250;//Recharge sequence timer for delayed shutdown
+            contactorOpenWait=0;//fresh current-settle wait for this shutdown
         }
 
         if(selectedVehicle->Start() && selectedVehicle->Ready())
@@ -762,6 +784,7 @@ static void Ms10Task(void)
         {
             opmode = MOD_OFF;
             rlyDly=250;//Recharge sequence timer for delayed shutdown
+            contactorOpenWait=0;//fresh current-settle wait for this shutdown
         }
         Param::SetInt(Param::opmode, opmode);
         break;

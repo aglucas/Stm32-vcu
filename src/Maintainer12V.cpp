@@ -32,7 +32,10 @@ Maintainer12V::Maintainer12V() :
   maintainTicks(0),
   maintainTicks_1Min(0),
   maintainDur_tmp(0),
-  initbyMaintain(false)
+  initbyMaintain(false),
+  maintCount(0),
+  maintCountPeriodMinutes(0),
+  maintCountPeriodTicks(0)
 {
 }
 
@@ -54,8 +57,38 @@ void Maintainer12V::Ms10Task() {
   }
 }
 
+void Maintainer12V::IncrementMaintCount() {
+  if (maintCount < 1023) {
+    maintCount++;
+  }
+}
+
 void Maintainer12V::Task200Ms(int opmode) {
   Param::SetInt(Param::minsUntilAllowedAgain, minsUntilAllowedAgain);
+
+  //12V-DCDC actually engaged (vehicle driven or charging) -> the counted period is clean, start over
+  if (opmode == MOD_RUN || opmode == MOD_CHARGE) {
+    maintCount = 0;
+    ErrorMessage::Unpost(ERR_MAINT12V);
+  }
+
+  //Roll the counting window over once maintCountPeriod hours have elapsed
+  maintCountPeriodTicks++;
+  if (maintCountPeriodTicks >= 300) {
+    maintCountPeriodTicks = 0;
+    maintCountPeriodMinutes++;
+    if (maintCountPeriodMinutes >= (Param::GetInt(Param::maintCountPeriod) * 60)) {
+      maintCountPeriodMinutes = 0;
+      maintCount = 0;
+    }
+  }
+
+  Param::SetInt(Param::maintCount, maintCount);
+
+  uint16_t maintErrCount = Param::GetInt(Param::maintErrCount);
+  if (maintErrCount != 0 && maintCount >= maintErrCount) {
+    ErrorMessage::Post(ERR_MAINT12V);
+  }
 
   if (opmode == MOD_OFF) {
     // reset every minute
@@ -75,11 +108,10 @@ void Maintainer12V::Task200Ms(int opmode) {
 
     if (allowWakeup && actual12V < min12V && minsUntilAllowedAgain < 1 &&
         (maintainDur_tmp != 0)) {
-      minsUntilAllowedAgain = WAKEUP_BLOCK_MINS;
+      minsUntilAllowedAgain = Param::GetInt(Param::wakeupBlockMins);
       maintainTicks = (GetInt(Param::wakeupMins) * 300); // initialize timer
       maintainTicks_1Min = 0;
-      runMaintainer = true; // if we arrive at set preheat time and duration is
-                            // non zero then initiate preheat
+      runMaintainer = true;
     }
   }
 
@@ -105,7 +137,8 @@ void Maintainer12V::Task200Ms(int opmode) {
 void Maintainer12V::CancelMaintainer() {
   maintainDur_tmp = 0;
   maintainTicks = 0;
-  minsUntilAllowedAgain = WAKEUP_BLOCK_MINS;
+  minsUntilAllowedAgain = Param::GetInt(Param::wakeupBlockMins);
+  runMaintainer = false;
 }
 
 void Maintainer12V::ParamsChange() {
@@ -113,4 +146,9 @@ void Maintainer12V::ParamsChange() {
       (GetInt(Param::wakeupMins) * 300); // number of 200ms ticks that equates to
                                         // maintaince timer in minutes
   maintainDur_tmp = GetInt(Param::wakeupMins);
+
+  uint8_t wakeupBlockMins = Param::GetInt(Param::wakeupBlockMins);
+  if (minsUntilAllowedAgain > wakeupBlockMins) {
+    minsUntilAllowedAgain = wakeupBlockMins; // pull an in-progress cooldown down to match a lowered setting
+  }
 }
