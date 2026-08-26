@@ -67,9 +67,10 @@ void Maintainer12V::Task200Ms(int opmode) {
   Param::SetInt(Param::minsUntilAllowedAgain, minsUntilAllowedAgain);
 
   //12V-DCDC actually engaged (vehicle driven or charging) -> the counted period is clean, start over
+  //(MAINT12V itself is cleared by the ErrorMessage::UnpostAll() the main state
+  //machine already runs every 10ms tick while in MOD_RUN/MOD_CHARGE)
   if (opmode == MOD_RUN || opmode == MOD_CHARGE) {
     maintCount = 0;
-    ErrorMessage::Unpost(ERR_MAINT12V);
   }
 
   //Roll the counting window over once maintCountPeriod hours have elapsed
