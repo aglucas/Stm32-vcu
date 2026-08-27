@@ -286,7 +286,15 @@ void NissLeafMng::Task10Ms(int16_t final_torque_request)
         bytes[6] = mprun10;
         bytes[7] = 0x8F;  //may not need checksum here?
 
-        can->Send(0x1F2, (uint32_t*)bytes, 8);
+        // Only command the PDM DC/DC on in modes that should actually run it.
+        // Withholding 0x1F2 during MOD_PRECHARGE keeps the converter from loading
+        // the bus through the precharge resistor (which can stall precharge or
+        // trip ERR_PRECHARGE); the rest of the VCM keepalive set still streams so
+        // the PDM stays awake.
+        if (opmode == MOD_CHARGE || opmode == MOD_RUN || opmode == MOD_MAINTAIN)
+        {
+            can->Send(0x1F2, (uint32_t*)bytes, 8);
+        }
 
         if(BMSspoof)
         {
