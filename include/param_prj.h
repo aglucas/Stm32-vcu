@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.30.A2
+#define VER 2.30.A6
 
 
 /* Entries must be ordered as follows:
@@ -251,7 +251,7 @@
     VALUE_ENTRY(udcheater,     "V",                 2097 ) \
     VALUE_ENTRY(powerheater,   "W",                 2098 ) \
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
-    VALUE_ENTRY(maintainWakeups, "",                2108 ) \
+    VALUE_ENTRY(maintainDurMins, "Mins",            2108 ) \
     VALUE_ENTRY(minsUntilAllowedAgain, "",           2109 ) \
     VALUE_ENTRY(maintCount,    "",                  2110 ) \
 

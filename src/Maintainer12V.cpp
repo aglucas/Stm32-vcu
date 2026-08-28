@@ -133,6 +133,10 @@ void Maintainer12V::Task200Ms(int opmode) {
       maintainDur_tmp--; // countdown minutes of charge time remaining.
     }
   }
+
+  //minutes remaining in the active maintain cycle; reads back the configured
+  //wakeupMins duration while idle in MOD_OFF, counts down while in MOD_MAINTAIN
+  Param::SetInt(Param::maintainDurMins, maintainDur_tmp);
 }
 
 void Maintainer12V::CancelMaintainer() {

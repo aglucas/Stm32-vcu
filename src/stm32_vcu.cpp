@@ -701,7 +701,6 @@ static void Ms10Task(void)
                 opmode = MOD_MAINTAIN;
                 rlyDly=25;//Recharge sequence timer
                 Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
-                Param::SetInt(Param::maintainWakeups, Param::GetInt(Param::maintainWakeups) + 1);
                 maintainer12V.IncrementMaintCount();
             }
 

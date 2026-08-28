@@ -280,21 +280,26 @@ void NissLeafMng::Task10Ms(int16_t final_torque_request)
         bytes[0] = 0x30;  // msg is muxed but pdm doesn't seem to care.
         bytes[1] = OBCpwr;
         bytes[2] = 0x20;//0x20=Normal Charge
-        bytes[3] = 0xAC;
+        bytes[3] = 0xAC;  // DC/DC converter output voltage request
         bytes[4] = 0x00;
         bytes[5] = 0x3C;
         bytes[6] = mprun10;
         bytes[7] = 0x8F;  //may not need checksum here?
 
-        // Only command the PDM DC/DC on in modes that should actually run it.
-        // Withholding 0x1F2 during MOD_PRECHARGE keeps the converter from loading
-        // the bus through the precharge resistor (which can stall precharge or
-        // trip ERR_PRECHARGE); the rest of the VCM keepalive set still streams so
-        // the PDM stays awake.
-        if (opmode == MOD_CHARGE || opmode == MOD_RUN || opmode == MOD_MAINTAIN)
+        // The DC/DC converter follows bytes[3]. Hold it off until the main
+        // contactor is closed (MOD_CHARGE / MOD_RUN / MOD_MAINTAIN): during
+        // MOD_PRECHARGE the HV bus is still coming up through the precharge
+        // resistor and a DC/DC load there stalls precharge / trips ERR_PRECHARGE.
+        // The frame itself keeps streaming every 10ms so the PDM charge state
+        // machine still arms on a cold MOD_OFF -> MOD_PRECHARGE -> MOD_CHARGE
+        // start (bytes[1]/OBCpwr is already forced to 0x64 outside MOD_CHARGE, so
+        // no AC charge power is commanded during precharge either).
+        if (opmode != MOD_CHARGE && opmode != MOD_RUN && opmode != MOD_MAINTAIN)
         {
-            can->Send(0x1F2, (uint32_t*)bytes, 8);
+            bytes[3] = 0x00;  // no DC/DC voltage request until contactor closed
         }
+
+        can->Send(0x1F2, (uint32_t*)bytes, 8);
 
         if(BMSspoof)
         {
